@@ -1,0 +1,20 @@
+name: Wren public-route monitoring
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wren-independent-monitor
+  cancel-in-progress: false
+jobs:
+  public-routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Public-route, search, and Cloudflare cron checks
+        env:
+          WREN_MONITOR_ADMIN_TOKEN: ${{ secrets.WREN_MONITOR_ADMIN_TOKEN }}
+        run: python3 independent.py
