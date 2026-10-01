@@ -40,7 +40,7 @@ def probe(name,url,kind,token=None):
 def run(require_cron=True):
     targets=[(*row,None) for row in TARGETS]
     token=os.environ.get('WREN_MONITOR_ADMIN_TOKEN')
-    if token:targets.append(('cloudflare-cron','https://wren-monitor.fond-books.workers.dev/status','cron',token))
+    if require_cron and token:targets.append(('cloudflare-cron','https://wren-monitor.fond-books.workers.dev/status','cron',token))
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         checks=list(executor.map(lambda row:probe(*row),targets))
     if require_cron and not token:checks.append({'name':'cloudflare-cron','ok':False,'reason':'Missing configured monitor secret'})
