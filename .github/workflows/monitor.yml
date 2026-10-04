@@ -17,4 +17,4 @@ jobs:
       - name: Public-route, search, and Cloudflare cron checks
         env:
           WREN_MONITOR_ADMIN_TOKEN: ${{ secrets.WREN_MONITOR_ADMIN_TOKEN }}
-        run: python3 independent.py
+        run: python3 independent.py --report-heartbeat

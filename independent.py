@@ -46,10 +46,29 @@ def run(require_cron=True):
     if require_cron and not token:checks.append({'name':'cloudflare-cron','ok':False,'reason':'Missing configured monitor secret'})
     return checks
 
+def report_heartbeat(report):
+    # A dispatch tests execution only. It cannot reset the scheduled-run clock.
+    if os.environ.get('GITHUB_EVENT_NAME') != 'schedule':return {'sent':False,'reason':'Not a scheduled run'}
+    run_id=os.environ.get('GITHUB_RUN_ID','')
+    token=os.environ.get('WREN_MONITOR_ADMIN_TOKEN')
+    if not run_id.isascii() or not run_id.isdecimal() or len(run_id)>32 or not token or report.get('cron_monitored') is not True:
+        return {'sent':False,'error':'Missing scheduled reporting configuration'}
+    body={key:report[key] for key in ['checked_at','ok','cron_monitored']}
+    body.update(event='schedule',run_id=run_id)
+    try:
+        request=urllib.request.Request('https://wren-monitor.fond-books.workers.dev/heartbeat',data=json.dumps(body).encode(),
+            headers={'Authorization':'Bearer '+token,'User-Agent':'WrenIndependentMonitor/1.0','Content-Type':'application/json'})
+        with urllib.request.build_opener(NoRedirect).open(request,timeout=12) as response:
+            raw=response.read(4097)
+            if response.status!=200 or len(raw)>4096 or json.loads(raw).get('accepted') is not True:raise ValueError('Heartbeat not accepted')
+        return {'sent':True}
+    except Exception as error:return {'sent':False,'error':type(error).__name__}
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--public-only',action='store_true',help='Explicitly omit cron-silence monitoring')
     parser.add_argument('--confirm-delay',type=int,default=15)
+    parser.add_argument('--report-heartbeat',action='store_true',help='Report scheduled results without renewing the clock for manual runs')
     args=parser.parse_args()
     if not 0<=args.confirm_delay<=30:parser.error('Confirmation delay must be 0–30 seconds')
     checks=run(not args.public_only)
@@ -59,6 +78,9 @@ def main():
     else:confirmation=checks
     report={'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'checks':checks,'confirmation':confirmation,
         'ok':all(c['ok'] for c in confirmation),'cron_monitored':not args.public_only}
+    if args.report_heartbeat:
+        report['heartbeat']=report_heartbeat(report)
+        if 'error' in report['heartbeat']:report['ok']=False
     print(json.dumps(report,indent=2))
     return 0 if report['ok'] else 1
 if __name__=='__main__':raise SystemExit(main())
